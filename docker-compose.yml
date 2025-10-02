@@ -1,0 +1,84 @@
+# Neurite Docker Compose Configuration
+# Development and Production ready setup
+
+version: '3.8'
+
+services:
+  # Frontend Service
+  neurite-frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    ports:
+      - "8080:80"
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - neurite-data:/app/data
+    depends_on:
+      - neurite-backend
+    networks:
+      - neurite-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Backend Service
+  neurite-backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    ports:
+      - "7070:7070"
+    environment:
+      - NODE_ENV=production
+      - PORT=7070
+    volumes:
+      - neurite-data:/app/data
+      - neurite-logs:/app/logs
+    networks:
+      - neurite-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7070/check"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Nginx Reverse Proxy (Optional)
+  neurite-proxy:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - neurite-ssl:/etc/nginx/ssl
+    depends_on:
+      - neurite-frontend
+      - neurite-backend
+    networks:
+      - neurite-network
+    restart: unless-stopped
+    profiles:
+      - production
+
+volumes:
+  neurite-data:
+    driver: local
+  neurite-logs:
+    driver: local
+  neurite-ssl:
+    driver: local
+
+networks:
+  neurite-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
